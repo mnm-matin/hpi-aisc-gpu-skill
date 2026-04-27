@@ -1,6 +1,6 @@
 # hpi-aisc-gpu skill
 
-An [Agent Skill](https://agentskills.io) for working safely on the HPI Scientific Compute and AI Service Center (AISC) SLURM cluster. Teaches the agent the non-negotiable rules (no installs on the login node, VPN, partition / account flags, ARM-vs-X86 quirks, monitoring patterns) and points it at compact reference docs for VPN setup, Hugging Face auth, and lightweight experiment tracking.
+An [Agent Skill](https://agentskills.io) for working safely on the HPI Scientific Compute and AI Service Center (AISC) SLURM cluster. Teaches the agent the non-negotiable rules (no installs on login nodes, VPN, partition / account flags, ARM-vs-X86 quirks, monitoring patterns, large-transfer safeguards) and points it at compact reference docs for VPN setup, dataset downloads, Hugging Face auth, and lightweight experiment tracking.
 
 The skill activates automatically when the agent's task mentions `ssh hpi-cluster`, `sbatch`, H100s, AISC, etc.
 
@@ -44,7 +44,7 @@ The skill is intentionally generic. Each user must set these up before its workf
 2. `~/.ssh/config` with a `Host hpi-cluster` block (your username, key, `KexAlgorithms curve25519-sha256`).
 3. `uv` installed at `$HOME/.local/bin/uv` on the cluster (one-time, via `srun`).
 
-No usernames, paths, keys, or VPN configs live in this repo.
+Keep usernames, local paths, keys, and VPN configs in local config only.
 
 ## Layout
 
@@ -53,8 +53,10 @@ SKILL.md                    Skill metadata + non-negotiable rules
 assets/
   slurm_uv_h100_job.sh      Starter sbatch script for a uv-managed H100 job
 references/
-  vpn-setup.md              VPN, SSH config, KEX fix
+  vpn-setup.md              VPN, SSH config, MTU troubleshooting
   hpi-cluster-workflow.md   Commands, partitions, monitoring, pitfalls
+  pre-submit-checklist.md   Required checklist before running cluster scripts
+  dataset-downloads.md      Large transfer and GRIT-like URL-list safeguards
   huggingface-auth.md       HF auth + cache conventions on the cluster
   experiment-tracking.md    Minimal metadata / metrics / artifacts schema
 ```

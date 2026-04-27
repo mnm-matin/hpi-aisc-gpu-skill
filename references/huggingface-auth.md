@@ -2,6 +2,8 @@
 
 Use this reference when a job needs gated Hugging Face models or datasets, repeated model downloads are expensive, or a containerized workflow needs non-interactive authentication.
 
+For large Hugging Face datasets, URL-list datasets, or repeated multi-GB downloads, also read `references/dataset-downloads.md` before submitting the job.
+
 ## Recommended default
 
 Store the token in a local file and expose it inside the job:
@@ -29,7 +31,8 @@ mkdir -p "$HF_HOME" "$HF_HUB_CACHE"
 Guidelines:
 
 - Keep `HF_HOME` and `HF_HUB_CACHE` on `$HOME` or project storage when downloads are expensive.
-- Do not keep long-lived model caches only in `${SLURM_TMPDIR}` or other ephemeral scratch.
+- Prefer project storage for large caches. `$HOME` has a 200 GB quota on the HPI cluster.
+- Do not keep long-lived model caches only in `$SLURM_SCRATCH`, `$TMP`, or other ephemeral scratch.
 - If a job unpacks large files temporarily, use scratch for the temporary step but keep the real cache persistent.
 
 ## CLI login

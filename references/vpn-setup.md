@@ -5,9 +5,9 @@ The HPI cluster sits behind a VPN. Before any `ssh hpi-cluster` command, confirm
 ## Prerequisites
 
 1. **`.ovpn` file** — provided by HPI (typically `SC_User.ovpn`).
-2. **Automated auth (optional)** — create a `vpn-auth.txt` alongside the `.ovpn` with your HPI username (line 1) and password (line 2). Add `auth-user-pass vpn-auth.txt` to the `.ovpn` if it isn't already there.
+2. **Automated auth (optional)** — if you use an auth file, keep it outside this repo, restrict it with `chmod 600`, and reference it from the `.ovpn` using `auth-user-pass` as described in the official VPN docs.
 
-Keep both files in the same directory. The commands below assume that directory is referred to as the "ovpn-dir".
+The commands below assume the VPN profile directory is referred to as the "ovpn-dir".
 
 ## Connecting
 
@@ -33,7 +33,7 @@ In non-interactive terminals (VS Code integrated terminal, AI agents), `sudo` ca
 osascript -e 'do shell script "openvpn --config /path/to/your.ovpn --cd /path/to/ovpn-dir --daemon --log /tmp/openvpn-hpi.log" with administrator privileges'
 ```
 
-`--cd` must point to the directory containing both the `.ovpn` and `vpn-auth.txt` (the config references `vpn-auth.txt` by relative path).
+`--cd` must point to the directory containing the `.ovpn` file and any auth file referenced by relative path.
 
 ### CLI — Linux
 
@@ -44,7 +44,7 @@ sudo openvpn --config /path/to/your.ovpn --cd /path/to/ovpn-dir --daemon --log /
 ## Verifying
 
 ```bash
-ssh -o ConnectTimeout=5 hpi-cluster hostname   # expect: lx01
+ssh -o ConnectTimeout=5 hpi-cluster hostname   # expect: a login-node hostname
 ```
 
 ## Disconnecting
@@ -71,9 +71,15 @@ route <cluster-subnet> 255.255.0.0     # e.g. the 10.x.x.x/16 range from your .o
 
 This sends only cluster traffic through the tunnel and leaves the rest of your internet untouched.
 
-## SSH KEX fix
+## VPN MTU troubleshooting
 
-OpenSSH ≥ 9.x defaults to the `sntrup761x25519` post-quantum key exchange algorithm. Its packets exceed the VPN tunnel MTU, causing SSH to hang at key exchange. Add `KexAlgorithms curve25519-sha256` to the `hpi-cluster` block in `~/.ssh/config`:
+The official troubleshooting page for `https://docs.sc.hpi.de/VPN/Troubleshooting/` documents VPN MTU issues and recommends adding this line to the `.ovpn` file when SSH times out:
+
+```
+tun-mtu 1400
+```
+
+If SSH still hangs at key exchange on a local OpenSSH client, this local workaround has also helped: add `KexAlgorithms curve25519-sha256` to the `hpi-cluster` block in `~/.ssh/config`:
 
 ```
 Host hpi-cluster

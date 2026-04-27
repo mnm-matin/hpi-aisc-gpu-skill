@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=project_job
-#SBATCH --account=aisc
-#SBATCH --partition=aisc-batch
+#SBATCH --account=<account>
+#SBATCH --partition=gpu-batch
 #SBATCH --constraint=ARCH:X86
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:h100:1
+#SBATCH --gpus=1
 #SBATCH --time=04:00:00
 #SBATCH --output=/sc/home/%u/logs/project_job_%j.out
 #SBATCH --error=/sc/home/%u/logs/project_job_%j.err
@@ -15,14 +15,15 @@
 set -euo pipefail
 
 if [ -z "${SLURM_JOB_ID:-}" ]; then
-  echo "ERROR: submit this file with sbatch; do not run it directly on lx01."
+  echo "ERROR: submit this file with sbatch; do not run it directly on a login node."
   exit 2
 fi
 
 echo "SLURM_JOB_ID=$SLURM_JOB_ID"
 echo "HOSTNAME=$(hostname)"
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}"
-echo "SLURM_TMPDIR=${SLURM_TMPDIR:-}"
+echo "SLURM_SCRATCH=${SLURM_SCRATCH:-}"
+echo "TMP=${TMP:-}"
 
 REPO_ROOT="${PROJECT_REPO_ROOT:-$HOME/my-project}"
 if [ ! -d "$REPO_ROOT" ]; then
@@ -30,7 +31,7 @@ if [ ! -d "$REPO_ROOT" ]; then
   exit 2
 fi
 
-WORKDIR="${SLURM_TMPDIR:-/tmp}/project_job_${SLURM_JOB_ID}"
+WORKDIR="${SLURM_SCRATCH:-${TMP:-/tmp}}/project_job_${SLURM_JOB_ID}"
 mkdir -p "$WORKDIR"
 
 cp -f "$HOME/.local/bin/uv" "$WORKDIR/uv"
@@ -52,8 +53,9 @@ $UV pip install --python "$PY" --torch-backend=cu124 \
 
 cd "$REPO_ROOT"
 
-# Keep expensive model downloads in $HOME so they survive across jobs.
-export HF_HOME="${HF_HOME:-$HOME/embeddings/hf}"
+# Keep expensive model downloads on persistent storage so they survive across jobs.
+# For large models or datasets, prefer project storage over $HOME because home has a quota.
+export HF_HOME="${HF_HOME:-$HOME/hf}"
 export HF_HUB_CACHE="${HF_HUB_CACHE:-$HF_HOME/hub}"
 mkdir -p "$HF_HOME" "$HF_HUB_CACHE"
 

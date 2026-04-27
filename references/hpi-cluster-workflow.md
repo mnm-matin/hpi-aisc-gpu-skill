@@ -2,98 +2,40 @@
 
 ## Access
 
-- `ssh hpi-cluster` uses the local SSH alias and lands on the HPI Scientific Compute login node `lx01`.
+- `ssh hpi-cluster` should use a local SSH alias for `hpc.sci.hpi.de` and lands on one of the HPI Scientific Compute login nodes.
 - The cluster is behind a VPN. Always confirm the tunnel is up before SSH.
 - Official docs:
   - SCI docs: `https://docs.sc.hpi.de/`
-  - AISC docs: `https://aisc.hpi.de/doc/`
+  - Terms of Usage: `https://docs.sc.hpi.de/Terms-of-Usage/`
+  - AI Usage Guidelines: `https://docs.sc.hpi.de/AI-Usage-Guidelines/`
+  - AISC docs: `https://docs.sc.hpi.de/aisc/`
   - VPN docs: `https://docs.sc.hpi.de/VPN/`
   - SLURM basics: `https://docs.sc.hpi.de/cluster/SLURM/Basics/`
+  - Login nodes: `https://docs.sc.hpi.de/cluster/Resources/Login-Nodes/`
+  - Run nodes: `https://docs.sc.hpi.de/cluster/Resources/Run-Nodes/`
+  - Data transfer: `https://docs.sc.hpi.de/cluster/Storage/Data-Transfer/`
 
-## Per-user prerequisites
+## VPN and SSH setup
 
-Before using this workflow, each user needs:
+Configure the VPN, `hpi-cluster` SSH alias, optional split tunnel, and local MTU troubleshooting from `references/vpn-setup.md`. User-specific values such as usernames, key paths, VPN profiles, and credential files should stay in local config.
 
-1. **VPN config** — the `.ovpn` file from HPI (typically `SC_User.ovpn`). For automated auth, create a `vpn-auth.txt` alongside it with your HPI username (line 1) and password (line 2), and add `auth-user-pass vpn-auth.txt` to the `.ovpn` if not already present. Keep both files in one directory.
-2. **SSH config** — an entry in `~/.ssh/config`:
-   ```
-   Host hpi-cluster
-       HostName hpc.sci.hpi.de
-       User <your-hpi-username>
-       IdentityFile ~/.ssh/<your-key>
-       IdentitiesOnly yes
-       KexAlgorithms curve25519-sha256
-   ```
-3. **`uv` on the cluster** — install once via `srun` into `$HOME/.local/bin/uv`.
-
-## Connecting the VPN
-
-Check if already running:
-
-```bash
-pgrep -af openvpn
-```
-
-### Option A: Tunnelblick (macOS GUI)
-
-Install your `.ovpn` as a Tunnelblick profile (`.tblk`). Connect via the menu bar icon, or programmatically:
-
-```bash
-osascript -e 'tell application "Tunnelblick" to connect "<profile-name>"'
-```
-
-### Option B: CLI OpenVPN — macOS (agent-friendly)
-
-On macOS, `sudo` in a non-interactive terminal (VS Code, AI agents) cannot prompt for a password. Use `osascript` to trigger the native macOS password dialog:
-
-```bash
-osascript -e 'do shell script "openvpn --config /path/to/your.ovpn --cd /path/to/ovpn-dir --daemon --log /tmp/openvpn-hpi.log" with administrator privileges'
-```
-
-### Option C: CLI OpenVPN — Linux
-
-```bash
-sudo openvpn --config /path/to/your.ovpn --cd /path/to/ovpn-dir --daemon --log /tmp/openvpn-hpi.log
-```
-
-Key details:
-- `--cd` must point to the directory containing both the `.ovpn` and `vpn-auth.txt` (the config references `vpn-auth.txt` by relative path).
-- `--daemon` backgrounds the process after connection.
-- `--log /tmp/openvpn-hpi.log` writes logs (root-owned; read with `sudo cat` or osascript).
-
-> **Split-tunnel tip**: The default HPI `.ovpn` routes *all* traffic through the VPN. If you only need cluster access, add these two lines to your `.ovpn`:
-> ```
-> pull-filter ignore "redirect-gateway"
-> route 10.130.0.0 255.255.0.0
-> ```
-> This sends only `10.130.0.0/16` through the tunnel and leaves the rest of your internet untouched.
-
-### Verify connectivity
+Verify connectivity before submitting jobs:
 
 ```bash
 ssh -o ConnectTimeout=5 hpi-cluster hostname
 ```
 
-Expected output: `lx01`.
+Expected output: a login-node hostname. The docs describe `hpc.sci.hpi.de` as the hostname that automatically connects to one of the available login nodes.
 
-> **SSH KEX fix**: OpenSSH ≥ 9.x defaults to `sntrup761x25519` (post-quantum) key exchange. Its packets exceed the VPN tunnel MTU, causing SSH to hang at "expecting SSH2_MSG_KEX_ECDH_REPLY". Add `KexAlgorithms curve25519-sha256` to the `hpi-cluster` block in `~/.ssh/config`.
-
-### Disconnect
-
-**macOS:**
-```bash
-osascript -e 'do shell script "killall openvpn" with administrator privileges'
-```
-Or disconnect from the Tunnelblick menu bar.
-
-**Linux:**
-```bash
-sudo killall openvpn
-```
+> **VPN MTU troubleshooting**: The official VPN troubleshooting page documents SSH timeouts as a possible MTU issue and recommends adding `tun-mtu 1400` to the `.ovpn` file.
+>
+> If SSH still hangs at key exchange on a local OpenSSH client, adding `KexAlgorithms curve25519-sha256` to the `hpi-cluster` block in `~/.ssh/config` has also helped locally.
 
 ## Login node safety
 
-Treat `lx01` as admin-only.
+Treat login nodes as admin-only.
+
+The exact login node may vary; this rule applies to all login nodes reached through `hpc.sci.hpi.de`.
 
 Allowed there:
 
@@ -102,7 +44,7 @@ Allowed there:
 - `tail`, `less`
 - small `ls`, `du`, `rm`
 
-Never do this on `lx01`:
+Never do this on login nodes:
 
 - `uv venv`, `uv pip install`, `pip install`
 - `uv run -m ...` for training, evaluation, embedding generation, or plotting
@@ -111,6 +53,20 @@ Never do this on `lx01`:
 - VS Code remote server, Jupyter, or JetBrains remote sessions
 
 If the user needs an interactive compute shell, use `srun --pty ...`, not the login node.
+
+If the user needs a lightweight long-lived helper process, use a Run Node (`rx01.hpc.sci.hpi.de` or `rx02.hpc.sci.hpi.de`). Run Nodes are capped at 8 GiB RAM and 4 CPU cores per user and must not be used for heavy compute or large downloads.
+
+## Large data transfers and dataset downloads
+
+Read `references/dataset-downloads.md` before writing a job that downloads datasets, crawls URL lists, uses torrents, or moves large artifacts.
+
+Key rules from the HPI docs:
+
+- Contact `sc-helpdesk@hpi.de` before large transfers.
+- The cluster shares a 10 Gbit/s internet uplink with all users and the HPI campus network.
+- Large internet transfers must run on compute nodes, not login nodes.
+- Jobs that flood the network may be killed as Terms-of-Usage violations.
+- URL-list datasets such as GRIT should normally be crawled through an intermediate machine and transferred as staged shards, rather than fetched directly from the cluster at high concurrency.
 
 ## Submit jobs
 
@@ -164,36 +120,39 @@ rsync -az hpi-cluster:~/experiments/logs/ cluster/_remote_logs/
 - Default to 1 GPU while validating a new pipeline.
 - Only scale once the job is stable and the user asked for it.
 - Release GPUs quickly when a run is blocked or idle.
-- At this site, never allocate more than 8 H100s.
+- At this site, never allocate more than 8 GPUs.
 - If the job depends on x86 wheels or compiled extensions, include `#SBATCH --constraint=ARCH:X86`.
-- Use `#SBATCH --gres=gpu:h100:N` when the workload specifically needs H100s.
+- Use `#SBATCH --gpus=N` for generic GPU work. If H100-class hardware is required, verify current features with `sinfo`/`scontrol` and use documented constraints such as `GPU_GEN:HOPPER`, `GPU_MEM:80GB`, or the live cluster's GPU SKU feature.
+- Keep requested time limits realistic; shorter accurate jobs are easier for Slurm backfill to schedule.
 
 ## Job script pattern
 
 Use these defaults unless the project has stronger requirements:
 
 ```bash
-#SBATCH --account=aisc
-#SBATCH --partition=aisc-batch
+#SBATCH --account=<account>
+#SBATCH --partition=gpu-batch
 #SBATCH --constraint=ARCH:X86
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:h100:1
+#SBATCH --gpus=1
 #SBATCH --time=04:00:00
 ```
+
+Use `aisc-batch` only for AISC workloads or when you intentionally choose preemptible AISC hardware. External AISC users can use only `aisc-*` partitions; HPI users may use AISC partitions when nodes are idle, but jobs may be preempted by AISC-funded workloads.
 
 Operational pattern:
 
 - `set -euo pipefail`
 - guard on `SLURM_JOB_ID`
 - explicit repo root env var such as `PROJECT_REPO_ROOT`
-- workdir under `${SLURM_TMPDIR:-/tmp}`
+- workdir under `${SLURM_SCRATCH:-${TMP:-/tmp}}`
 - copy `uv` from `$HOME/.local/bin/uv`
 - `uv venv --no-project`
 - install only the packages the job needs
-- keep caches under `$HOME` when downloads are expensive
+- keep large caches and datasets in project storage when downloads are expensive; keep `$HOME` under the 200 GB quota
 
 ## Common pitfalls
 
@@ -201,10 +160,11 @@ Operational pattern:
 - `sbatch --export=...` splits values on commas. Prefer positional args or set complex env vars inside the script.
 - SLURM runs a copied spool version of the script, so `${BASH_SOURCE[0]}` is not a reliable repo locator.
 - Mixed architecture scheduling can surface obscure build failures. If in doubt, pin `ARCH:X86`.
+- Multiple `--constraint` flags do not combine; the last one wins. Put all required features in one expression such as `ARCH:X86&SCRATCH:NVME`.
+- `SLURM_SCRATCH` exists only when the allocated node has local scratch. Request `SCRATCH:NVME` or `SCRATCH:SSD` when the job depends on local scratch.
 
 ## Support
 
 - Scientific Compute helpdesk: `sc-helpdesk@hpi.de`
 - AISC technical helpdesk: `aisc-helpdesk@hpi.de`
 - AISC organizational support: `ki-servicezentrum@hpi.de`
-- SCI Slack: `#sc-announce` and `#sc-discuss`
